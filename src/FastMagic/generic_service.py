@@ -1,5 +1,6 @@
 from .generic_repo import GenericRepository
 
+
 class GenericService:
 
     def __init__(self, repo: GenericRepository):
