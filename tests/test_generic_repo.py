@@ -20,6 +20,38 @@ def test_list_records(user_repo):
     assert len(records) == 2
 
 
+def test_list_records_order_by(user_repo):
+    user_repo.create({"name": "Bob", "age": 25})
+    user_repo.create({"name": "Alice", "age": 30})
+    records = user_repo.list_records(order_by="name")
+    assert [r.name for r in records] == ["Alice", "Bob"]
+
+
+def test_list_records_order_by_descending(user_repo):
+    user_repo.create({"name": "Alice", "age": 30})
+    user_repo.create({"name": "Bob", "age": 25})
+    records = user_repo.list_records(order_by="-age")
+    assert [r.name for r in records] == ["Alice", "Bob"]
+
+
+def test_list_records_order_by_invalid_column(user_repo):
+    with pytest.raises(ValueError, match="nao e uma coluna"):
+        user_repo.list_records(order_by="nonexistent")
+
+
+def test_list_records_filters(user_repo):
+    user_repo.create({"name": "Alice", "age": 30})
+    user_repo.create({"name": "Bob", "age": 25})
+    records = user_repo.list_records(filters={"name": "Alice"})
+    assert len(records) == 1
+    assert records[0].name == "Alice"
+
+
+def test_list_records_filters_invalid_column(user_repo):
+    with pytest.raises(ValueError, match="nao e uma coluna"):
+        user_repo.list_records(filters={"nonexistent": "x"})
+
+
 def test_get_by_id(user_repo):
     created = user_repo.create({"name": "Alice", "age": 30})
     found = user_repo.get_by_id(created.id)
