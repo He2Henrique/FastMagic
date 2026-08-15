@@ -1,7 +1,7 @@
 from enum import auto, Flag
 from typing import Any, TypeVar, Generator
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase, Session
 
@@ -51,8 +51,15 @@ class GenericAPI:
             self.router.post("/", status_code=status.HTTP_201_CREATED)(create)
 
         if Route.LIST in routes:
-            def list_all():
-                return repo.list_records()
+            def list_all(request: Request, order_by: str | None = None):
+                filters = {k: v for k, v in request.query_params.items() if k != "order_by"}
+                try:
+                    return repo.list_records(
+                        order_by=order_by.split(",") if order_by else None,
+                        filters=filters or None,
+                    )
+                except ValueError as exc:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
             list_all.__annotations__["return"] = list[response_schema]
             self.router.get("/")(list_all)
 

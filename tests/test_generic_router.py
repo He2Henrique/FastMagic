@@ -29,6 +29,37 @@ def test_list_route(client):
     assert len(response.json()) == 2
 
 
+def test_list_route_order_by(client):
+    client.post("/", json={"name": "Bob", "age": 25})
+    client.post("/", json={"name": "Alice", "age": 30})
+    response = client.get("/?order_by=name")
+    assert response.status_code == 200
+    assert [u["name"] for u in response.json()] == ["Alice", "Bob"]
+
+
+def test_list_route_order_by_descending(client):
+    client.post("/", json={"name": "Alice", "age": 30})
+    client.post("/", json={"name": "Bob", "age": 25})
+    response = client.get("/?order_by=-age")
+    assert response.status_code == 200
+    assert [u["name"] for u in response.json()] == ["Alice", "Bob"]
+
+
+def test_list_route_filters(client):
+    client.post("/", json={"name": "Alice", "age": 30})
+    client.post("/", json={"name": "Bob", "age": 25})
+    response = client.get("/?name=Alice")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "Alice"
+
+
+def test_list_route_invalid_filter_column(client):
+    response = client.get("/?nonexistent=x")
+    assert response.status_code == 400
+
+
 def test_get_by_id_route(client):
     created = client.post("/", json={"name": "Alice", "age": 30}).json()
     response = client.get(f"/{created['id']}")

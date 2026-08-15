@@ -13,8 +13,30 @@ class GenericRepository(Generic[T]):
     def _pk_column(self):
         return inspect(self.model).mapper.primary_key[0]
 
-    def list_records(self) -> list[T]:
+    def _column(self, name: str):
+        columns = inspect(self.model).mapper.columns
+        if name not in columns:
+            raise ValueError(f"{name} nao e uma coluna de {self.model.__name__}.")
+        return columns[name]
+
+    def list_records(
+        self,
+        order_by: str | list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> list[T]:
         stmt = select(self.model)
+
+        if filters:
+            stmt = stmt.where(*(self._column(name) == value for name, value in filters.items()))
+
+        if order_by:
+            fields = [order_by] if isinstance(order_by, str) else order_by
+            clauses = []
+            for field in fields:
+                descending = field.startswith("-")
+                column = self._column(field[1:] if descending else field)
+                clauses.append(column.desc() if descending else column.asc())
+            stmt = stmt.order_by(*clauses)
 
         return list(self.db.execute(stmt).scalars().all())
 

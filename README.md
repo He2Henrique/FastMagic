@@ -105,7 +105,8 @@ SQLAlchemy e um model.
 
 Metodos disponiveis:
 
-- `list_records()`: lista todos os registros do model;
+- `list_records(order_by=None, filters=None)`: lista os registros do model,
+  com ordenacao e filtros opcionais;
 - `get_by_id(id_to_search)`: busca um registro pela chave primaria;
 - `create(dictnary)`: cria, salva e retorna um novo registro;
 - `update(id_to_update, **data_to_update)`: atualiza um registro pela chave primaria;
@@ -122,6 +123,9 @@ from app.models import User
 repo = GenericRepository(db=session, model=User)
 
 users = repo.list_records()
+users_por_nome = repo.list_records(order_by="name")
+users_mais_velhos = repo.list_records(order_by="-age")
+users_ativos = repo.list_records(filters={"active": True})
 user = repo.get_by_id(1)
 created = repo.create({"name": "Ana", "email": "ana@example.com"})
 updated = repo.update(1, name="Ana Maria")
@@ -139,6 +143,17 @@ orders = repo.get_related_records(
 
 Caso o relacionamento informado nao exista no model, o repositorio levanta
 `ValueError`.
+
+`order_by` aceita uma coluna (`"name"`), uma lista de colunas
+(`["name", "-age"]`) e o prefixo `-` indica ordem descendente. `filters` e um
+`dict[str, Any]` com igualdade exata por coluna (`{"active": True}`). Caso
+`order_by` ou `filters` referenciem uma coluna que nao existe no model, o
+repositorio levanta `ValueError`.
+
+Na rota gerada por `GenericAPI` (`GET /`), `order_by` vira query param
+(`?order_by=name` ou `?order_by=-age,name`) e qualquer outro query param e
+tratado como filtro de igualdade (`?active=true`). Uma coluna invalida em
+qualquer um dos dois retorna `400 Bad Request`.
 
 ## GenericService
 
