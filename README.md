@@ -7,7 +7,7 @@ A ideia do projeto, ate agora, e reduzir codigo repetitivo em tres pontos:
 
 - geracao de schemas Pydantic a partir de models SQLAlchemy;
 - operacoes genericas de repositorio para CRUD;
-- uma camada simples de service sobre o repositorio.
+- geracao automatica de rotas REST (CRUD) para um `APIRouter` do FastAPI.
 
 ## Status atual
 
@@ -34,13 +34,13 @@ src/FastMagic/
   __init__.py
   schema_model.py
   generic_repo.py
-  generic_service.py
+  generic_router.py
 ```
 
 O pacote exporta:
 
 ```python
-from FastMagic import SchemaModel, GenericRepository, GenericService
+from FastMagic import SchemaModel, GenericRepository, GenericAPI, Route
 ```
 
 ## SchemaModel
@@ -166,42 +166,15 @@ tipo Python da coluna (`int`, `float`, `bool`, `date`, `datetime`) antes de
 filtrar. Uma coluna invalida ou um valor que nao pode ser convertido retorna
 `400 Bad Request`.
 
-## GenericService
+## GenericAPI
 
-`GenericService` e uma camada simples sobre `GenericRepository`. Ela apenas
-repassa as chamadas para o repositorio, mantendo um ponto unico para futuras
-regras de negocio.
-
-Metodos disponiveis:
-
-- `listar()`
-- `get_by_id(id_to_search)`
-- `get_related_records(parent_id, relationship_name, child_relationships=())`
-- `create(data)`
-- `update(id_to_update, **data_to_update)`
-- `exclude(id_to_delete)`
-
-Exemplo:
+`GenericAPI` registra rotas CRUD prontas em um `APIRouter` do FastAPI,
+usando um `GenericRepository` por baixo dos panos.
 
 ```python
-from FastMagic import GenericRepository, GenericService
-from app.models import User
+from fastapi import APIRouter, FastAPI
 
-
-repo = GenericRepository(db=session, model=User)
-service = GenericService(repo)
-
-users = service.listar()
-user = service.get_by_id(1)
-```
-
-## Exemplo de uso com FastAPI
-
-```python
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from FastMagic import GenericRepository, GenericService, SchemaModel
+from FastMagic import GenericAPI, SchemaModel
 from app.database import get_session
 from app.models import User
 
@@ -211,30 +184,52 @@ class UserSchema(SchemaModel):
 
 
 router = APIRouter(prefix="/users", tags=["users"])
+GenericAPI(router, get_session(), User, UserSchema)
 
-
-def get_user_service(db: Session = Depends(get_session)):
-    repo = GenericRepository(db, User)
-    return GenericService(repo)
-
-
-@router.get("/", response_model=list[UserSchema.response])
-def list_users(service: GenericService = Depends(get_user_service)):
-    return service.listar()
-
-
-@router.post("/", response_model=UserSchema.response)
-def create_user(
-    data: UserSchema.request,
-    service: GenericService = Depends(get_user_service),
-):
-    return service.create(data.model_dump())
+app = FastAPI()
+app.include_router(router)
 ```
+
+O segundo parametro e um generator de `Session` (o mesmo formato usado por
+`Depends` do FastAPI) — `GenericAPI` consome a primeira sessao gerada e a usa
+para todas as rotas.
+
+Rotas registradas por padrao (equivalentes a `routes=Route.ALL`):
+
+- `POST /`: cria um registro a partir de `schema.request`, retorna `201`;
+- `GET /`: lista registros (`schema.response`), aceitando `order_by` e
+  filtros via query params, como descrito na secao de `GenericRepository`;
+- `GET /{item_id}`: busca por chave primaria, `404` se nao encontrado;
+- `PUT /{item_id}`: atualiza parcialmente via `schema.update`, `404` se nao
+  encontrado;
+- `DELETE /{item_id}`: remove, retorna `204`, `404` se nao encontrado.
+
+Para expor apenas algumas rotas, use o parametro `routes` com a flag `Route`:
+
+```python
+from FastMagic import GenericAPI, Route
+
+GenericAPI(router, get_session(), User, UserSchema, routes=Route.CREATE | Route.LIST)
+GenericAPI(router, get_session(), User, UserSchema, routes=Route.ALL & ~Route.DELETE)
+```
+
+Valores disponiveis: `Route.CREATE`, `Route.LIST`, `Route.GET`,
+`Route.UPDATE`, `Route.DELETE` e `Route.ALL`.
+
+Tambem e possivel expor uma rota extra para um relacionamento do model, usando
+`get_related_records` do repositorio por baixo:
+
+```python
+api = GenericAPI(router, get_session(), User, UserSchema)
+api.add_related_route("/{item_id}/posts", "posts", PostSchema.response)
+```
+
+Isso registra `GET /{item_id}/posts`, retornando `404` se o registro pai nao
+existir.
 
 ## Observacoes
 
-- A biblioteca ainda nao possui testes versionados no diretorio `tests`.
 - O nome do pacote no `pyproject.toml` e `fastmagic`, mas o modulo importado e
   `FastMagic`.
-- Alguns nomes de metodos ainda misturam portugues e ingles, como `listar`,
-  `exclude` e `get_by_id`.
+- `GenericRepository.create` recebe o parametro `dictnary` (grafia mantida
+  como esta no codigo hoje).
