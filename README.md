@@ -184,15 +184,17 @@ class UserSchema(SchemaModel):
 
 
 router = APIRouter(prefix="/users", tags=["users"])
-GenericAPI(router, get_session(), User, UserSchema)
+GenericAPI(router, get_session, User, UserSchema)
 
 app = FastAPI()
 app.include_router(router)
 ```
 
-O segundo parametro e um generator de `Session` (o mesmo formato usado por
-`Depends` do FastAPI) — `GenericAPI` consome a primeira sessao gerada e a usa
-para todas as rotas.
+O segundo parametro e a propria funcao de dependencia de `Session` (a mesma
+que voce passaria para `Depends` do FastAPI, no formato
+`Generator[Session, None, None]`) — nao uma sessao ja criada. `GenericAPI`
+registra essa funcao com `Depends` em cada rota gerada, entao cada requisicao
+recebe sua propria sessao, que e fechada ao final da requisicao.
 
 Rotas registradas por padrao (equivalentes a `routes=Route.ALL`):
 

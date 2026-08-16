@@ -73,12 +73,17 @@ def post_repo(db):
 
 
 def make_session_gen(session: Session):
-    yield session
+    def _get_session():
+        yield session
+    return _get_session
+
+
+PREFIX = "/items"
 
 
 @pytest.fixture
 def client(db):
-    router = APIRouter()
+    router = APIRouter(prefix=PREFIX)
     GenericAPI(router, make_session_gen(db), User, UserSchema)
     app = FastAPI()
     app.include_router(router)

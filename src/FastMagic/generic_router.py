@@ -1,8 +1,8 @@
 from datetime import date, datetime
 from enum import auto, Flag
-from typing import Any, TypeVar, Generator
+from typing import Any, Callable, TypeVar, Generator
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase, Session
@@ -46,13 +46,14 @@ class GenericAPI:
     def __init__(
         self,
         router: APIRouter,
-        gen_session: Generator[Session, None, None],
+        get_session: Callable[[], Generator[Session, None, None]],
         model: type[T],
         schema: type[SchemaModel],
         routes: Route = Route.ALL,
     ) -> None:
         self.router = router
-        self.repo = GenericRepository(next(gen_session), model)
+        self.model = model
+        self.get_session = get_session
 
         self._register_crud_routes(schema.request, schema.update, schema.response, routes)
 
@@ -63,17 +64,20 @@ class GenericAPI:
         response_schema: type[BaseModel],
         routes: Route,
     ) -> None:
-        repo = self.repo
+        model = self.model
+        get_session = self.get_session
         not_found = self._not_found
 
         if Route.CREATE in routes:
-            def create(payload):
+            def create(payload, db: Session = Depends(get_session)):
+                repo = GenericRepository(db, model)
                 return repo.create(payload.model_dump())
             create.__annotations__.update({"payload": request_schema, "return": response_schema})
             self.router.post("", status_code=status.HTTP_201_CREATED)(create)
 
         if Route.LIST in routes:
-            def list_all(request: Request, order_by: str | None = None):
+            def list_all(request: Request, order_by: str | None = None, db: Session = Depends(get_session)):
+                repo = GenericRepository(db, model)
                 try:
                     filters = {
                         k: _cast_filter_value(repo.model, k, v)
@@ -90,7 +94,8 @@ class GenericAPI:
             self.router.get("")(list_all)
 
         if Route.GET in routes:
-            def get_by_id(item_id: Any):
+            def get_by_id(item_id: Any, db: Session = Depends(get_session)):
+                repo = GenericRepository(db, model)
                 item = repo.get_by_id(item_id)
                 if item is None:
                     raise not_found()
@@ -99,7 +104,8 @@ class GenericAPI:
             self.router.get("/{item_id}")(get_by_id)
 
         if Route.UPDATE in routes:
-            def update(item_id: Any, payload):
+            def update(item_id: Any, payload, db: Session = Depends(get_session)):
+                repo = GenericRepository(db, model)
                 data = payload.model_dump(exclude_unset=True)
                 item = repo.update(item_id, **data) if data else repo.get_by_id(item_id)
                 if item is None:
@@ -109,7 +115,8 @@ class GenericAPI:
             self.router.patch("/{item_id}")(update)
 
         if Route.DELETE in routes:
-            def delete(item_id: Any) -> None:
+            def delete(item_id: Any, db: Session = Depends(get_session)) -> None:
+                repo = GenericRepository(db, model)
                 if repo.delete(item_id) is None:
                     raise not_found()
             self.router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)(delete)
@@ -121,10 +128,12 @@ class GenericAPI:
         response_schema: type[BaseModel],
         child_relationships: tuple[str, ...] = (),
     ) -> None:
-        repo = self.repo
+        model = self.model
+        get_session = self.get_session
         not_found = self._not_found
 
-        def get_related(item_id: Any):
+        def get_related(item_id: Any, db: Session = Depends(get_session)):
+            repo = GenericRepository(db, model)
             records = repo.get_related_records(item_id, relationship_name, child_relationships)
             if records is None:
                 raise not_found()
