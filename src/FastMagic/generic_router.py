@@ -106,7 +106,7 @@ class GenericAPI:
                     raise not_found()
                 return item
             update.__annotations__.update({"payload": update_schema, "return": response_schema})
-            self.router.put("/{item_id}")(update)
+            self.router.patch("/{item_id}")(update)
 
         if Route.DELETE in routes:
             def delete(item_id: Any) -> None:
