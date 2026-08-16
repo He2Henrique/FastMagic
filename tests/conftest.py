@@ -1,7 +1,9 @@
+from datetime import date
+
 import pytest
 from fastapi import FastAPI, APIRouter
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, Integer, String, ForeignKey
+from sqlalchemy import create_engine, Date, Integer, String, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, Mapped, mapped_column, relationship
 from sqlalchemy.pool import StaticPool
 
@@ -25,6 +27,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String)
     age: Mapped[int] = mapped_column(Integer)
+    birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     posts: Mapped[list["Post"]] = relationship("Post", back_populates="user")
 
 

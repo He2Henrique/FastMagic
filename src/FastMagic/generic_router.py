@@ -1,14 +1,36 @@
+from datetime import date, datetime
 from enum import auto, Flag
 from typing import Any, TypeVar, Generator
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from .generic_repo import GenericRepository
+from .generic_repo import GenericRepository, split_filter_key
 from .schema_model import SchemaModel
 
 T = TypeVar("T", bound=DeclarativeBase)
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _cast_filter_value(model: type, key: str, raw: str) -> Any:
+    name, _ = split_filter_key(key)
+    columns = inspect(model).mapper.columns
+    if name not in columns:
+        return raw
+
+    python_type = columns[name].type.python_type
+    if python_type is bool:
+        return raw.strip().lower() in _TRUE_VALUES
+    if python_type is datetime:
+        return datetime.fromisoformat(raw)
+    if python_type is date:
+        return date.fromisoformat(raw)
+    if python_type in (int, float):
+        return python_type(raw)
+    return raw
 
 
 class Route(Flag):
@@ -52,8 +74,12 @@ class GenericAPI:
 
         if Route.LIST in routes:
             def list_all(request: Request, order_by: str | None = None):
-                filters = {k: v for k, v in request.query_params.items() if k != "order_by"}
                 try:
+                    filters = {
+                        k: _cast_filter_value(repo.model, k, v)
+                        for k, v in request.query_params.items()
+                        if k != "order_by"
+                    }
                     return repo.list_records(
                         order_by=order_by.split(",") if order_by else None,
                         filters=filters or None,

@@ -4,6 +4,17 @@ from sqlalchemy.orm import Session, selectinload, DeclarativeBase
 
 T = TypeVar("T", bound=DeclarativeBase)
 
+_FILTER_OPERATORS = ("gte", "lte", "gt", "lt")
+
+
+def split_filter_key(key: str) -> tuple[str, str]:
+    for operator in _FILTER_OPERATORS:
+        suffix = f"__{operator}"
+        if key.endswith(suffix):
+            return key[: -len(suffix)], operator
+    return key, "eq"
+
+
 class GenericRepository(Generic[T]):
 
     def __init__(self, db: Session, model: Type[T]) -> None:
@@ -19,6 +30,20 @@ class GenericRepository(Generic[T]):
             raise ValueError(f"{name} nao e uma coluna de {self.model.__name__}.")
         return columns[name]
 
+    def _filter_condition(self, key: str, value: Any):
+        name, operator = split_filter_key(key)
+        column = self._column(name)
+
+        if operator == "gte":
+            return column >= value
+        if operator == "lte":
+            return column <= value
+        if operator == "gt":
+            return column > value
+        if operator == "lt":
+            return column < value
+        return column == value
+
     def list_records(
         self,
         order_by: str | list[str] | None = None,
@@ -27,7 +52,7 @@ class GenericRepository(Generic[T]):
         stmt = select(self.model)
 
         if filters:
-            stmt = stmt.where(*(self._column(name) == value for name, value in filters.items()))
+            stmt = stmt.where(*(self._filter_condition(key, value) for key, value in filters.items()))
 
         if order_by:
             fields = [order_by] if isinstance(order_by, str) else order_by

@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from .conftest import User, Post, UserSchema
 
@@ -50,6 +52,35 @@ def test_list_records_filters(user_repo):
 def test_list_records_filters_invalid_column(user_repo):
     with pytest.raises(ValueError, match="nao e uma coluna"):
         user_repo.list_records(filters={"nonexistent": "x"})
+
+
+def test_list_records_filters_gte(user_repo):
+    user_repo.create({"name": "Alice", "age": 30})
+    user_repo.create({"name": "Bob", "age": 25})
+    records = user_repo.list_records(filters={"age__gte": 30})
+    assert [r.name for r in records] == ["Alice"]
+
+
+def test_list_records_filters_lte(user_repo):
+    user_repo.create({"name": "Alice", "age": 30})
+    user_repo.create({"name": "Bob", "age": 25})
+    records = user_repo.list_records(filters={"age__lte": 25})
+    assert [r.name for r in records] == ["Bob"]
+
+
+def test_list_records_filters_gt_and_lt(user_repo):
+    user_repo.create({"name": "Alice", "age": 30})
+    user_repo.create({"name": "Bob", "age": 25})
+    user_repo.create({"name": "Carol", "age": 40})
+    assert [r.name for r in user_repo.list_records(filters={"age__gt": 30})] == ["Carol"]
+    assert [r.name for r in user_repo.list_records(filters={"age__lt": 30})] == ["Bob"]
+
+
+def test_list_records_filters_date(user_repo):
+    user_repo.create({"name": "Alice", "age": 30, "birthday": date(1996, 1, 1)})
+    user_repo.create({"name": "Bob", "age": 25, "birthday": date(2001, 6, 15)})
+    records = user_repo.list_records(filters={"birthday__gte": date(2000, 1, 1)})
+    assert [r.name for r in records] == ["Bob"]
 
 
 def test_get_by_id(user_repo):

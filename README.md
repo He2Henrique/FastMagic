@@ -146,14 +146,25 @@ Caso o relacionamento informado nao exista no model, o repositorio levanta
 
 `order_by` aceita uma coluna (`"name"`), uma lista de colunas
 (`["name", "-age"]`) e o prefixo `-` indica ordem descendente. `filters` e um
-`dict[str, Any]` com igualdade exata por coluna (`{"active": True}`). Caso
-`order_by` ou `filters` referenciem uma coluna que nao existe no model, o
+`dict[str, Any]` cuja chave pode ter um sufixo de comparacao — `__gte`,
+`__lte`, `__gt`, `__lt` — ou nenhum, para igualdade exata:
+
+```python
+repo.list_records(filters={"age__gte": 18, "age__lt": 65})
+repo.list_records(filters={"created_at__gte": date(2026, 1, 1)})
+```
+
+Caso `order_by` ou `filters` referenciem uma coluna que nao existe no model, o
 repositorio levanta `ValueError`.
 
 Na rota gerada por `GenericAPI` (`GET /`), `order_by` vira query param
 (`?order_by=name` ou `?order_by=-age,name`) e qualquer outro query param e
-tratado como filtro de igualdade (`?active=true`). Uma coluna invalida em
-qualquer um dos dois retorna `400 Bad Request`.
+tratado como filtro, com os mesmos sufixos de comparacao aceitos pelo
+repositorio (`?age__gte=18&age__lt=65`, `?active=true`,
+`?created_at__gte=2026-01-01`). O valor da query string e convertido para o
+tipo Python da coluna (`int`, `float`, `bool`, `date`, `datetime`) antes de
+filtrar. Uma coluna invalida ou um valor que nao pode ser convertido retorna
+`400 Bad Request`.
 
 ## GenericService
 

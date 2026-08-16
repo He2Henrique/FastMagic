@@ -60,6 +60,27 @@ def test_list_route_invalid_filter_column(client):
     assert response.status_code == 400
 
 
+def test_list_route_filters_gte(client):
+    client.post("/", json={"name": "Alice", "age": 30})
+    client.post("/", json={"name": "Bob", "age": 25})
+    response = client.get("/?age__gte=30")
+    assert response.status_code == 200
+    assert [u["name"] for u in response.json()] == ["Alice"]
+
+
+def test_list_route_filters_date(client):
+    client.post("/", json={"name": "Alice", "age": 30, "birthday": "1996-01-01"})
+    client.post("/", json={"name": "Bob", "age": 25, "birthday": "2001-06-15"})
+    response = client.get("/?birthday__gte=2000-01-01")
+    assert response.status_code == 200
+    assert [u["name"] for u in response.json()] == ["Bob"]
+
+
+def test_list_route_filters_invalid_number(client):
+    response = client.get("/?age__gte=not-a-number")
+    assert response.status_code == 400
+
+
 def test_get_by_id_route(client):
     created = client.post("/", json={"name": "Alice", "age": 30}).json()
     response = client.get(f"/{created['id']}")
