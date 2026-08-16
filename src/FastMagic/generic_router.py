@@ -70,7 +70,7 @@ class GenericAPI:
             def create(payload):
                 return repo.create(payload.model_dump())
             create.__annotations__.update({"payload": request_schema, "return": response_schema})
-            self.router.post("/", status_code=status.HTTP_201_CREATED)(create)
+            self.router.post("", status_code=status.HTTP_201_CREATED)(create)
 
         if Route.LIST in routes:
             def list_all(request: Request, order_by: str | None = None):
@@ -87,7 +87,7 @@ class GenericAPI:
                 except ValueError as exc:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
             list_all.__annotations__["return"] = list[response_schema]
-            self.router.get("/")(list_all)
+            self.router.get("")(list_all)
 
         if Route.GET in routes:
             def get_by_id(item_id: Any):
